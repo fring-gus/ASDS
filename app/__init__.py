@@ -1,8 +1,11 @@
-from flask import Flask
+import os
+import logging
+from flask import Flask, jsonify
 from flask_login import LoginManager
 from flask_wtf.csrf import CSRFProtect
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from werkzeug.middleware.proxy_fix import ProxyFix
 from config import config
 from app.models import db, User
 
@@ -23,7 +26,25 @@ def load_user(user_id):
 def create_app(config_name='default'):
     """Application factory."""
     app = Flask(__name__)
+    
+    # ── Production Proxy Support ──
+    # Trust reverse proxy headers (e.g., from NGINX) to enable correct IP-based rate limiting
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+
     app.config.from_object(config[config_name])
+
+    # ── Logging ──
+    log_level = logging.DEBUG if app.config.get('DEBUG') else logging.INFO
+    logging.basicConfig(
+        level=log_level,
+        format='%(asctime)s %(levelname)s [%(name)s] %(message)s',
+        handlers=[
+            logging.StreamHandler(),                          # console
+            logging.FileHandler('asds.log', encoding='utf-8'),  # file
+        ]
+    )
+    logger = logging.getLogger('asds')
+    logger.info(f'Starting ASDS in {config_name} mode')
 
     # Initialize extensions
     db.init_app(app)
@@ -52,5 +73,16 @@ def create_app(config_name='default'):
     app.view_functions['auth.register'] = auth_limit(app.view_functions['auth.register'])
     app.view_functions['admin.login'] = auth_limit(app.view_functions['admin.login'])
 
-    return app
+    # ── Error handlers ──
+    @app.errorhandler(413)
+    def request_too_large(e):
+        """Return JSON for 413 so AJAX callers get a readable message."""
+        return jsonify({'error': 'Upload too large. Maximum allowed size is 500 MB.'}), 413
 
+    # ── Health check endpoint ──
+    @app.route('/health')
+    def health_check():
+        """Health check for deployment platforms (Render, Railway, etc.)."""
+        return jsonify({'status': 'ok', 'service': 'ASDS'}), 200
+
+    return app
