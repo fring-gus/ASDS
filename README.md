@@ -1,184 +1,156 @@
 # ASDS — Automated Similarity Detection System
 
-ASDS is a Flask web application for managing project-abstract submissions and identifying potentially similar work. Faculty create classes, students submit PDF or DOCX abstracts, and faculty run a similarity report after submissions close.
+ASDS is an academic project-similarity detection platform built with Flask, SQLAlchemy, and Sentence Transformers. It allows faculty to manage classes, collect student project abstracts (PDF/DOCX), and detect problem-domain overlaps using a two-stage neural similarity engine.
 
-The application uses a hybrid comparison pipeline that combines semantic embeddings, lexical overlap, and character n-gram structure. It is intended to highlight submissions that deserve human review; it is not a plagiarism verdicting system.
 
-## Features
 
-- Role-based accounts for students, faculty, and administrators.
-- Faculty-managed classes with unique join codes.
-- Student enrollment and PDF/DOCX abstract uploads.
-- Text extraction from PDF and Word documents.
-- Hybrid similarity analysis:
-  - semantic embeddings using `all-mpnet-base-v2`;
-  - TF-IDF cosine similarity using unigrams and bigrams;
-  - character-trigram Jaccard similarity;
-  - cross-encoder reranking of borderline matches.
-- Configurable 65% default similarity threshold.
-- Background comparison with live progress updates.
-- Manual, faculty-only comparison of arbitrary PDF/DOCX files without changing class submissions.
-- Downloadable original documents and Excel comparison reports.
-- SQLite by default, with support for an alternate SQLAlchemy `DATABASE_URL`.
-- Health endpoint at `GET /health`.
+ASDS similarity pipeline:
 
-## Architecture
+1. **Domain-Specific Stopwords Filtering (`TECH_STOPWORDS`)**  
+   Strips ~677 curated computer science, language, framework, database, infrastructure, and academic filler terms during preprocessing. This prevents projects from being falsely flagged simply because they share common tech stacks (e.g., *Python, React, Flask, Docker, PostgreSQL*), focusing comparison strictly on the **problem domain**.
 
-```text
-Browser
-  │
-  ▼
-Flask blueprints and Jinja templates
-  ├── Authentication and role checks
-  ├── Student submissions
-  ├── Faculty class/report management
-  └── Administrator account management
-  │
-  ├── SQLAlchemy database
-  │     User ── Class ── Submission ── Result
-  │
-  ├── Local upload storage
-  │
-  └── Similarity engine
-        preprocessing → embeddings / TF-IDF / n-grams
-                      → optional cross-encoder → stored results
+2. **Two-Stage Screening & Replacement**  
+   - **Stage 1 (Screening)**: Fast pairwise semantic embeddings via `all-mpnet-base-v2` (768-dim) with dynamic GPU (64) / CPU (16) batch sizing.  
+   - **High-Confidence Bypass (`score >= 0.80`)**: Auto-flagged high-confidence duplicates skip cross-encoder reranking, saving computation.  
+   - **Stage 2 (Cross-Encoder Reranking)**: Borderline pairs (`threshold <= score < 0.80`) are evaluated in a vectorized batch using `cross-encoder/stsb-roberta-base` Cross-encoder scores directly replace bi-encoder scores for borderline pairs, eliminating arbitrary heuristic weighting.  
+  
+
+3. **Dual Analysis Modes**  
+   - **Semantic Mode (Default)**: Two-stage neural pipeline for project abstracts and proposals.  
+   - **Lexical Mode**: TF-IDF unigram + bigram cosine similarity for assignment text overlap.
+
+---
+
+## Core Features
+
+- **Role-Based Portals**: Separate dashboards for Students, Faculty, and Administrators.
+- **Class Management**: Faculty generate unique join codes, open/close submission windows, and review rosters.
+- **Document Ingestion**: Automatic plain-text extraction from student PDF and DOCX uploads.
+- **Priority Resolution**: When duplicate abstracts are detected, the earlier submission remains `accepted`; the later submission is marked `rejected`.
+- **Live Progress Polling**: Non-blocking background comparisons with real-time status steps in UI modals.
+- **Manual Comparison Sandbox**: Faculty can upload and compare up to 120 arbitrary documents in-memory without affecting class records.
+- **Reporting**: Export structured Excel reports (.xlsx) detailing submission statuses and collision pairings.
+
+---
+
+## How the Engine Works
+
+```
+Raw Submissions (PDF / DOCX)
+         │
+         ▼
+[Text Extraction & Preprocessing]
+  └── Strip whitespace, punctuation, and ~677 TECH_STOPWORDS
+         │
+         ├──► [Semantic Mode]
+         │      │
+         │      ▼
+         │    Stage 1: all-mpnet-base-v2 (GPU/CPU batched embeddings)
+         │      │
+         │      ├── Bi-score >= 0.80 ──► [Auto-Flagged (Skip Cross-Encoder)]
+         │      ├── Bi-score < 0.65  ──► [Marked Safe (Skip Cross-Encoder)]
+         │      └── 0.65 <= Bi-score < 0.80 (Borderline Gray Zone)
+         │               │
+         │               ▼
+         │             Stage 2: cross-encoder/stsb-roberta-base
+         │               │
+         │               └── CE-Score replaces Bi-Score ──► Flag if CE >= 0.65
+         │
+         └──► [Lexical Mode]
+                │
+                ▼
+              TF-IDF (1-2 n-grams, max 5000 features) ──► Cosine Similarity
 ```
 
-## Requirements
+---
 
-- Python with a compatible PyTorch wheel for your platform.
-- Internet access for the first semantic comparison, unless the Hugging Face models are already cached.
-- Sufficient CPU, RAM, and disk space for PyTorch and the downloaded language models.
+## Quick Start
 
-Core dependencies are listed and pinned in [`requirements.txt`](requirements.txt).
-
-## Quick start
-
-Create and activate a virtual environment, then install dependencies:
+### 1. Environment Setup
 
 ```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
+python -m venv asds
+.\asds\Scripts\Activate.ps1
+pip install --upgrade pip
+pip install -r requirements.txt
 ```
 
-Create a local environment file named `.env`:
+### 2. Configure Environment (`.env`)
 
-```dotenv
-SECRET_KEY=replace-with-a-long-random-secret
+Create a `.env` file in the project root:
+
+```ini
+SECRET_KEY=change-this-to-a-secure-random-key
 FLASK_ENV=development
 HOST=127.0.0.1
 PORT=5000
 ```
 
-Start the application:
+### 3. Run the Application
 
 ```powershell
 python run.py
 ```
 
-Open [http://127.0.0.1:5000](http://127.0.0.1:5000).
+Access the app at [http://127.0.0.1:5000](http://127.0.0.1:5000).
 
-On first use of semantic comparison, Sentence Transformers downloads the `all-mpnet-base-v2` model. The cross-encoder model downloads when a borderline pair needs reranking, so the first comparison can take longer than later runs.
+> **Note**: On the very first run, Sentence Transformers automatically caches `all-mpnet-base-v2` and `cross-encoder/stsb-roberta-base` from Hugging Face. Subsequent runs load from local cache.
 
-## User workflow
+---
 
-### Faculty
+## User Workflows
 
-1. Register as a faculty user and sign in.
-2. Create a class; share its generated code with students.
-3. Review enrolled students and their submissions.
-4. Close uploads once submission is complete.
-5. Run comparison and wait for the progress indicator to finish.
-6. Review flagged pairs and export the Excel report if needed.
+- **Faculty**:
+  1. Register/Login &rarr; Create a class section &rarr; Share the 8-character class code.
+  2. Monitor student submissions &rarr; Click **Close Uploads** when the deadline passes.
+  3. Click **Run Comparison** &rarr; Monitor real-time progress.
+  4. Review flagged vs. safe pairs &rarr; Click **Export Excel** for the final grade report.
+  5. Use **Manual File Comparison** to evaluate ad-hoc files directly from disk without modifying class records.
 
-### Students
+- **Students**:
+  1. Register/Login &rarr; Join a class via class code.
+  2. Submit project title & upload PDF/DOCX abstract.
+  3. View acceptance/rejection status after faculty runs comparison.
 
-1. Register as a student and sign in.
-2. Join a class using the faculty-provided code.
-3. Upload a project title and a text-based PDF or DOCX abstract.
-4. Re-upload while the class remains open, if permitted.
+- **Administrators**:
+  - Access `/admin/login` to manage user accounts, change passwords, and view system statistics.
 
-### Administrators
+---
 
-Administrators can create users, reset passwords, and remove accounts with associated data. The application currently has no command to bootstrap its first administrator; create or promote the initial admin through controlled database administration before deploying.
+## Configuration Reference
 
-## Similarity scoring
-
-For each submission pair, ASDS calculates:
-
-| Signal | Weight | Purpose |
-|---|---:|---|
-| Semantic embeddings | 55% | Finds related meaning and paraphrased content |
-| TF-IDF cosine similarity | 25% | Finds lexical overlap and copied wording |
-| Character-trigram Jaccard score | 20% | Finds structurally similar phrasing |
-
-Pairs with hybrid scores between 0.50 and 0.80 receive cross-encoder verification. Scores at or above the configured threshold—0.65 by default—are flagged. When a class is processed, the later submitted item in a flagged pair is marked `rejected`; the earlier submission has priority.
-
-Thresholds and weights are defined in [`app/engine.py`](app/engine.py). Treat every match as a review signal, not automated evidence of misconduct.
-
-## Configuration
-
-| Variable | Default | Description |
+| Environment Variable | Default | Purpose |
 |---|---|---|
-| `SECRET_KEY` | Development fallback | Flask session/CSRF signing key. Set a strong value in every deployed environment. |
-| `FLASK_ENV` | `development` | Use `production` to select production configuration. |
-| `HOST` | `127.0.0.1` | Bind address used by `run.py`. |
-| `PORT` | `5000` | Bind port used by `run.py`. |
-| `DATABASE_URL` | `sqlite:///app.db` | SQLAlchemy connection URL. |
-| `SECURE_COOKIES` | `True` in production | Send session cookies only over HTTPS. |
+| `SECRET_KEY` | `dev-only-change-me` | Session encryption and CSRF signing key. |
+| `DATABASE_URL` | `sqlite:///app.db` | SQLAlchemy database connection URI. |
+| `FLASK_ENV` | `development` | Environment mode (`development` or `production`). |
+| `SECURE_COOKIES` | `True` (production) | Restricts session cookies to HTTPS connections. |
+| `HOST` / `PORT` | `127.0.0.1:5000` | Local server binding address and port. |
 
-Uploads are saved under `uploads/` by default. The global request limit is 500 MB; configure a stricter limit if that better suits the deployment.
+---
 
-## Production notes
+## Repository Structure
 
-For production, serve the application behind a reverse proxy and a WSGI server rather than Flask’s development server:
-
-```bash
-gunicorn run:app
 ```
-
-Set at least these environment variables in production:
-
-```dotenv
-FLASK_ENV=production
-SECRET_KEY=long-random-secret
-DATABASE_URL=your-production-database-url
-SECURE_COOKIES=True
+├── app/
+│   ├── __init__.py           # Flask app factory, extensions, and error handlers
+│   ├── engine.py             # Similarity engine (v2.1-ce-replace)
+│   ├── tech_stopwords.py     # Curated technical & academic stopword dictionary
+│   ├── models.py             # SQLAlchemy models (User, Class, Submission, Result)
+│   ├── faculty.py            # Faculty routes (classes, comparison, exports)
+│   ├── student.py            # Student routes (enrolling, upload, submissions)
+│   ├── admin.py              # Administrator management routes
+│   ├── auth.py               # Authentication, login, registration
+│   ├── routes.py             # Main index and landing redirects
+│   ├── static/               # CSS styles and front-end assets
+│   └── templates/            # Jinja2 HTML templates
+├── instance/
+│   └── app.db                # SQLite database
+├── uploads/                  # Uploaded student submission files
+├── config.py                 # Application configuration classes
+├── run.py                    # Entry point script
+└── requirements.txt          # Production dependencies
 ```
-
-The background progress implementation keeps locks and progress state in process memory. It is suitable for a single application process. For multi-worker or horizontally scaled deployments, move analysis to a durable job queue and persist job state.
-
-## Health check
-
-```text
-GET /health
-```
-
-Response:
-
-```json
-{"status":"ok","service":"ASDS"}
-```
-
-## Repository layout
-
-```text
-app/
-  admin.py                 Administrator routes
-  auth.py                  Registration, login, role checks
-  engine.py                Hybrid similarity engine
-  faculty.py               Class, progress, export, manual comparison routes
-  models.py                SQLAlchemy models
-  student.py               Enrollment and submission routes
-  templates/               Jinja templates
-  static/                  CSS and browser assets
-config.py                  Application configuration
-run.py                     Application entry point
-requirements.txt           Python dependencies
-```
-
 ## Development hygiene
 
 Do not commit local runtime data or secrets. At minimum, ignore:
