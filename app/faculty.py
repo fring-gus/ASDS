@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, redirect, url_for, flash, request
+from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify
 from flask_login import current_user
 from app.auth import role_required
 from app.models import db, Class, Submission
@@ -90,25 +90,38 @@ def reopen_uploads(code):
 @faculty.route('/class/<string:code>/compare', methods=['POST'])
 @role_required('faculty')
 def run_comparison(code):
-    """Run similarity comparison using TF-IDF + Cosine Similarity."""
+    """Start similarity comparison in background thread."""
+    import threading
+    from flask import current_app
     cls = Class.query.filter_by(code=code, faculty_id=current_user.id).first_or_404()
 
     if cls.is_open:
         flash('Close uploads before running comparison.', 'error')
         return redirect(url_for('faculty.class_detail', code=code))
 
-    from app.engine import run_comparison as compare
-    result = compare(cls.id)
+    class_id = cls.id
+    app = current_app._get_current_object()
 
-    if 'error' in result:
-        flash(result['error'], 'error')
-    else:
-        flash(
-            f'Comparison complete! {result["total_pairs"]} pairs analysed, '
-            f'{result["flagged_pairs"]} flagged (≥{int(result["threshold"]*100)}% similar).',
-            'success'
-        )
-    return redirect(url_for('faculty.class_detail', code=code))
+    def run_in_background():
+        with app.app_context():
+            from app.engine import run_comparison as compare
+            compare(class_id)
+
+    thread = threading.Thread(target=run_in_background, daemon=True)
+    thread.start()
+
+    return jsonify({'started': True, 'class_id': class_id})
+
+
+@faculty.route('/class/<int:class_id>/progress')
+@role_required('faculty')
+def comparison_progress(class_id):
+    """Poll endpoint — returns current comparison progress as JSON."""
+    from app.engine import get_progress
+    progress = get_progress(class_id)
+    if progress is None:
+        return jsonify({'status': 'idle', 'percent': 0, 'message': 'No comparison running.'})
+    return jsonify(progress)
 
 
 @faculty.route('/download/<int:submission_id>')
@@ -252,4 +265,126 @@ def delete_class(code):
     db.session.commit()
     flash(f'Class "{cls.name}" deleted.', 'success')
     return redirect(url_for('faculty.dashboard'))
+
+
+# ── Manual File Comparison ──
+
+def _extract_text_from_upload(filepath, ext):
+    """
+    Extract plain text from a PDF or DOCX file.
+    Duplicated here from student.py so the faculty blueprint is self-contained.
+    """
+    try:
+        if ext == 'pdf':
+            from PyPDF2 import PdfReader
+            reader = PdfReader(filepath)
+            return ''.join(page.extract_text() or '' for page in reader.pages)
+        elif ext == 'docx':
+            from docx import Document
+            doc = Document(filepath)
+            return '\n'.join(p.text for p in doc.paragraphs)
+    except Exception:
+        return ''
+    return ''
+
+
+@faculty.route('/manual-compare', methods=['POST'])
+@role_required('faculty')
+def manual_compare():
+    """
+    Accept uploaded PDF/DOCX files, extract their text, and run the
+    hybrid similarity engine in a background thread.
+
+    Form fields:
+        files[]   — 2 or more PDF/DOCX files
+        labels[]  — optional matching label per file (falls back to filename)
+        task_id   — client-generated UUID for progress polling
+    """
+    import os, uuid, tempfile, threading
+    from flask import current_app
+    from werkzeug.utils import secure_filename
+
+    files = request.files.getlist('files[]')
+    raw_labels = request.form.getlist('labels[]')
+    task_id = request.form.get('task_id', '').strip() or str(uuid.uuid4())
+
+    if len(files) < 2:
+        return jsonify({'error': 'Please upload at least 2 files.'}), 400
+
+    # Build a matching labels list (pad with filenames if fewer labels than files)
+    labels = []
+    for idx, f in enumerate(files):
+        if idx < len(raw_labels) and raw_labels[idx].strip():
+            labels.append(raw_labels[idx].strip())
+        else:
+            labels.append(secure_filename(f.filename) or f'File {idx + 1}')
+
+    # Save uploads to a temporary directory
+    tmp_dir = tempfile.mkdtemp(prefix='asds_manual_')
+    saved = []
+    file_errors = []
+
+    for f, label in zip(files, labels):
+        filename = secure_filename(f.filename)
+        if not filename:
+            file_errors.append(f'"{label}": invalid filename.')
+            continue
+        ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
+        if ext not in ('pdf', 'docx'):
+            file_errors.append(f'"{label}": only PDF and DOCX are accepted.')
+            continue
+        path = os.path.join(tmp_dir, f'{len(saved)}_{filename}')
+        f.save(path)
+        saved.append({'label': label, 'path': path, 'ext': ext})
+
+    if len(saved) < 2:
+        return jsonify({
+            'error': 'Need at least 2 valid files. ' + ' '.join(file_errors)
+        }), 400
+
+    app = current_app._get_current_object()
+
+    def run_in_background():
+        import shutil
+        items = []
+        for entry in saved:
+            text = _extract_text_from_upload(entry['path'], entry['ext'])
+            items.append({'label': entry['label'], 'text': text})
+
+        # Clean up temp files after extraction
+        try:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+        except Exception:
+            pass
+
+        with app.app_context():
+            from app.engine import compare_texts_manual, _comparison_progress, _progress_lock
+            result = compare_texts_manual(task_id, items)
+            # Stash the final result payload so the frontend can retrieve it
+            with _progress_lock:
+                existing = _comparison_progress.get(task_id, {})
+                existing['result'] = result
+                _comparison_progress[task_id] = existing
+
+    thread = threading.Thread(target=run_in_background, daemon=True)
+    thread.start()
+
+    return jsonify({'started': True, 'task_id': task_id})
+
+
+@faculty.route('/manual-compare/progress')
+@role_required('faculty')
+def manual_compare_progress():
+    """
+    Poll endpoint for manual comparison progress.
+    Query param: task_id
+    """
+    from app.engine import get_progress
+    task_id = request.args.get('task_id', '').strip()
+    if not task_id:
+        return jsonify({'status': 'idle', 'percent': 0, 'message': 'No task_id provided.'})
+    progress = get_progress(task_id)
+    if progress is None:
+        return jsonify({'status': 'idle', 'percent': 0, 'message': 'Not started yet.'})
+    return jsonify(progress)
 
