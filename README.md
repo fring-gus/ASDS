@@ -6,13 +6,13 @@ ASDS is an academic project-similarity detection platform built with Flask, SQLA
 
 ASDS similarity pipeline:
 
-1. **Domain-Specific Stopwords Filtering (`TECH_STOPWORDS`)**  
-   Strips ~677 curated computer science, language, framework, database, infrastructure, and academic filler terms during preprocessing. This prevents projects from being falsely flagged simply because they share common tech stacks (e.g., *Python, React, Flask, Docker, PostgreSQL*), focusing comparison strictly on the **problem domain**.
-
-2. **Two-Stage Screening & Replacement**  
+1. **Two-Stage Screening & Replacement**  
    - **Stage 1 (Screening)**: Fast pairwise semantic embeddings via `all-mpnet-base-v2` (768-dim) with dynamic GPU (64) / CPU (16) batch sizing.  
    - **High-Confidence Bypass (`score >= 0.80`)**: Auto-flagged high-confidence duplicates skip cross-encoder reranking, saving computation.  
-   - **Stage 2 (Cross-Encoder Reranking)**: Borderline pairs (`threshold <= score < 0.80`) are evaluated in a vectorized batch using `cross-encoder/stsb-roberta-base` Cross-encoder scores directly replace bi-encoder scores for borderline pairs, eliminating arbitrary heuristic weighting.  
+   - **Stage 2 (Cross-Encoder Reranking)**: Borderline pairs (`threshold <= score < 0.80`) are evaluated in a vectorized batch using `cross-encoder/stsb-roberta-base` Cross-encoder scores directly replace bi-encoder scores for borderline pairs, eliminating arbitrary heuristic weighting.
+
+2. **Domain-Specific Stopwords Filtering (`TECH_STOPWORDS`)**  
+   Strips ~677 curated computer science, language, framework, database, infrastructure, and academic filler terms during preprocessing. This prevents projects from being falsely flagged simply because they share common tech stacks (e.g., *Python, React, Flask, Docker, PostgreSQL*), focusing comparison strictly on the **problem domain**.
   
 
 ## Core Features
