@@ -1,4 +1,4 @@
-/* ── Design System Tokens ── */
+/* â”€â”€ Design System Tokens â”€â”€ */
 :root {
     --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
     --primary: #4f46e5;
@@ -21,7 +21,7 @@
     --transition: all 0.2s ease;
 }
 
-/* ── Base Reset ── */
+/* â”€â”€ Base Reset â”€â”€ */
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 body {
@@ -32,7 +32,7 @@ body {
     -webkit-font-smoothing: antialiased;
 }
 
-/* ── Navigation ── */
+/* â”€â”€ Navigation â”€â”€ */
 nav {
     background: var(--surface);
     padding: 0.8rem 1.5rem;
@@ -95,14 +95,14 @@ nav {
     color: var(--text-main);
 }
 
-/* ── Main Content ── */
+/* â”€â”€ Main Content â”€â”€ */
 main {
     max-width: 800px;
     margin: 2rem auto;
     padding: 0 1rem;
 }
 
-/* ── Flash Messages ── */
+/* â”€â”€ Flash Messages â”€â”€ */
 .flash {
     padding: 1rem 1.2rem;
     border-radius: var(--radius-md);
@@ -121,7 +121,7 @@ main {
 .flash.success { background: var(--surface); color: var(--success); border-left: 4px solid var(--success); }
 .flash.error { background: var(--surface); color: var(--danger); border-left: 4px solid var(--danger); }
 
-/* ── Auth Forms ── */
+/* â”€â”€ Auth Forms â”€â”€ */
 .auth-container {
     max-width: 420px;
     margin: 4rem auto;
@@ -198,11 +198,11 @@ main {
 .auth-link a { color: var(--primary); text-decoration: none; font-weight: 500; }
 .auth-link a:hover { text-decoration: underline; }
 
-/* ── Page Content ── */
+/* â”€â”€ Page Content â”€â”€ */
 h1 { margin-bottom: 1.5rem; color: var(--text-main); font-weight: 700; letter-spacing: -1px; font-size: 2rem; }
 h2 { color: var(--text-main); font-weight: 600; letter-spacing: -0.5px; margin-bottom: 1rem; }
 
-/* ── Dashboard Stats ── */
+/* â”€â”€ Dashboard Stats â”€â”€ */
 .stats-row { display: flex; gap: 1rem; margin-bottom: 2rem; }
 .stat-card {
     flex: 1;
@@ -223,10 +223,10 @@ h2 { color: var(--text-main); font-weight: 600; letter-spacing: -0.5px; margin-b
 .stat-number { display: block; font-size: 2.5rem; font-weight: 800; color: var(--text-main); line-height: 1.1; margin-bottom: 0.2rem; }
 .stat-label { font-size: 0.85rem; font-weight: 500; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
 
-/* ── Section Header ── */
+/* â”€â”€ Section Header â”€â”€ */
 .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
 
-/* ── Class Cards ── */
+/* â”€â”€ Class Cards â”€â”€ */
 .class-card {
     background: var(--surface);
     padding: 1.5rem;
@@ -246,14 +246,22 @@ h2 { color: var(--text-main); font-weight: 600; letter-spacing: -0.5px; margin-b
 
 .class-card-info { display: flex; gap: 1.5rem; font-size: 0.9rem; color: var(--text-muted); margin-bottom: 1rem; }
 .class-card-info strong { color: var(--text-main); font-weight: 600; }
-.class-card-actions { display: flex; gap: 0.5rem; margin-top: 1rem; }
+.class-card-actions { display: flex; align-items: center; gap: 0.5rem; margin-top: 1rem; }
+.class-card-actions .btn {
+    width: 6rem;
+    height: 2.5rem;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
 
-/* ── Badges ── */
+/* â”€â”€ Badges â”€â”€ */
 .badge { padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
 .badge-open { background: var(--success-bg); color: var(--success); }
 .badge-closed { background: var(--danger-bg); color: var(--danger); }
 
-/* ── Data Table ── */
+/* â”€â”€ Data Table â”€â”€ */
 .data-table {
     width: 100%;
     border-collapse: separate;
@@ -271,23 +279,23 @@ h2 { color: var(--text-main); font-weight: 600; letter-spacing: -0.5px; margin-b
 .data-table tr:last-child td { border-bottom: none; }
 .data-table tr:hover td { background: var(--bg-body); }
 
-/* ── Status Labels ── */
+/* â”€â”€ Status Labels â”€â”€ */
 .status { padding: 0.25rem 0.6rem; border-radius: var(--radius-md); font-size: 0.8rem; font-weight: 600; }
 .status-pending { background: var(--warning-bg); color: var(--warning); }
 .status-accepted { background: var(--success-bg); color: var(--success); }
 .status-rejected { background: var(--danger-bg); color: var(--danger); }
 
-/* ── Class Detail ── */
+/* â”€â”€ Class Detail â”€â”€ */
 .class-header { display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem; }
 .class-header h1 { margin-bottom: 0; }
 .class-meta { display: flex; gap: 1.5rem; font-size: 0.95rem; color: var(--text-muted); margin-bottom: 2rem; }
 .class-meta strong { color: var(--text-main); font-weight: 600; }
 
 .action-bar { display: flex; flex-wrap: wrap; gap: 0.8rem; margin: 2rem 0; background: var(--surface); padding: 1rem; border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); border: 1px solid var(--border); align-items: center; }
-.action-bar form { margin: 0; }
-.action-bar .btn { min-width: auto !important; margin-top: 0; }
+.action-bar form { margin: 0; display: inline-flex; }
+.action-bar .btn { width: auto; margin-top: 0; display: inline-flex; align-items: center; justify-content: center; height: 42px; line-height: 1; }
 
-/* ── Enrolled Students Panel ── */
+/* â”€â”€ Enrolled Students Panel â”€â”€ */
 .students-panel {
     background: var(--surface);
     border-radius: var(--radius-lg);
@@ -311,12 +319,12 @@ h2 { color: var(--text-main); font-weight: 600; letter-spacing: -0.5px; margin-b
 }
 .students-panel[open] > summary { border-bottom-color: var(--border); }
 .students-panel > summary::-webkit-details-marker { display: none; }
-.students-panel > summary::after { content: '▸'; margin-left: auto; font-size: 0.85rem; color: var(--text-muted); transition: transform 0.2s; }
+.students-panel > summary::after { content: 'â–¸'; margin-left: auto; font-size: 0.85rem; color: var(--text-muted); transition: transform 0.2s; }
 .students-panel[open] > summary::after { transform: rotate(90deg); }
 .students-panel > summary:hover { background: #f1f5f9; }
 .students-panel .data-table { box-shadow: none; margin-bottom: 0; border: none; border-radius: 0; }
 
-/* ── Result Cards ── */
+/* â”€â”€ Result Cards â”€â”€ */
 .report-summary { display: flex; gap: 1rem; margin-bottom: 2rem; }
 .result-card {
     background: var(--surface);
@@ -340,12 +348,12 @@ h2 { color: var(--text-main); font-weight: 600; letter-spacing: -0.5px; margin-b
 .similarity-score { font-size: 1.25rem; font-weight: 800; color: var(--text-main); margin-left: 1rem; }
 .result-flagged .similarity-score { color: var(--danger); }
 
-/* ── Utilities ── */
+/* â”€â”€ Utilities â”€â”€ */
 .back-link { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.5rem 0; margin-bottom: 1.5rem; color: var(--text-muted); text-decoration: none; font-weight: 500; font-size: 0.9rem; transition: var(--transition); }
 .back-link:hover { color: var(--primary); transform: translateX(-4px); }
 .empty-msg { color: var(--text-muted); text-align: center; padding: 3rem 1rem; font-style: italic; background: var(--surface); border-radius: var(--radius-lg); border: 1px dashed var(--border); }
 
-/* ── Join Class Bar ── */
+/* â”€â”€ Join Class Bar â”€â”€ */
 .join-class-bar {
     background: var(--surface);
     padding: 1.5rem;
@@ -360,20 +368,20 @@ h2 { color: var(--text-main); font-weight: 600; letter-spacing: -0.5px; margin-b
 .inline-form input { flex: 1; }
 .inline-form .btn { width: auto; margin: 0; }
 
-/* ── Submission Info ── */
+/* â”€â”€ Submission Info â”€â”€ */
 .submission-info { display: flex; justify-content: space-between; align-items: center; padding: 0.8rem; background: var(--bg-body); border-radius: var(--radius-md); margin-top: 0.5rem; font-size: 0.9rem; }
 .submission-info strong { color: var(--text-main); }
 
-/* ── File Upload ── */
+/* â”€â”€ File Upload â”€â”€ */
 .form-group input[type="file"] { border: 2px dashed var(--border); padding: 1.5rem; text-align: center; background: var(--bg-body); cursor: pointer; }
 .form-group input[type="file"]:hover { border-color: var(--primary); }
 .file-hint { font-size: 0.85rem; color: var(--text-muted); margin-top: 0.5rem; text-align: center; }
 
-/* ── Admin Nav Link ── */
+/* â”€â”€ Admin Nav Link â”€â”€ */
 .nav-admin { background: #fce7f3; color: #9d174d !important; padding: 0.3rem 0.8rem; border-radius: 20px; font-size: 0.85rem; font-weight: 600; border: 1px solid #fbcfe8; }
 .nav-admin:hover { background: #fbcfe8; }
 
-/* ── Landing Page Hero (Keeping unchanged mainly) ── */
+/* â”€â”€ Landing Page Hero (Keeping unchanged mainly) â”€â”€ */
 .hero { text-align: center; padding: 4rem 1rem 2rem; }
 .hero h1 { font-size: 2.5rem; margin-bottom: 1rem; letter-spacing: -1px; }
 .hero p { color: var(--text-muted); font-size: 1.1rem; margin-bottom: 2.5rem; max-width: 600px; margin-left: auto; margin-right: auto; }
