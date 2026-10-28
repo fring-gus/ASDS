@@ -15,12 +15,6 @@ ASDS similarity pipeline:
    - **Stage 2 (Cross-Encoder Reranking)**: Borderline pairs (`threshold <= score < 0.80`) are evaluated in a vectorized batch using `cross-encoder/stsb-roberta-base` Cross-encoder scores directly replace bi-encoder scores for borderline pairs, eliminating arbitrary heuristic weighting.  
   
 
-3. **Dual Analysis Modes**  
-   - **Semantic Mode (Default)**: Two-stage neural pipeline for project abstracts and proposals.  
-   - **Lexical Mode**: TF-IDF unigram + bigram cosine similarity for assignment text overlap.
-
----
-
 ## Core Features
 
 - **Role-Based Portals**: Separate dashboards for Students, Faculty, and Administrators.
