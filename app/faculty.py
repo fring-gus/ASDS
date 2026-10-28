@@ -9,7 +9,7 @@ faculty = Blueprint('faculty', __name__, url_prefix='/faculty')
 @faculty.route('/dashboard')
 @role_required('faculty')
 def dashboard():
-    """Faculty dashboard — overview of all classes."""
+    """Faculty dashboard â€” overview of all classes."""
     classes = Class.query.filter_by(faculty_id=current_user.id).order_by(Class.created_at.desc()).all()
 
     total = len(classes)
@@ -26,7 +26,7 @@ def dashboard():
 @faculty.route('/class/<string:code>')
 @role_required('faculty')
 def class_detail(code):
-    """Class detail page — view submissions, run comparison."""
+    """Class detail page â€” view submissions, run comparison."""
     cls = Class.query.filter_by(code=code, faculty_id=current_user.id).first_or_404()
     submissions = Submission.query.filter_by(class_id=cls.id).order_by(Submission.uploaded_at.asc()).all()
     student_count = len(cls.students)
@@ -40,7 +40,7 @@ def class_detail(code):
 @faculty.route('/class/create', methods=['GET', 'POST'])
 @role_required('faculty')
 def create_class():
-    """Create a new class — placeholder, built in Class Management module."""
+    """Create a new class â€” placeholder, built in Class Management module."""
     from flask import flash
     import string, random
     if request.method == 'POST':
@@ -96,16 +96,22 @@ def run_comparison(code):
     cls = Class.query.filter_by(code=code, faculty_id=current_user.id).first_or_404()
 
     if cls.is_open:
+        if request.is_json or request.headers.get('Content-Type') == 'application/json' or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({'error': 'Please close uploads before running comparison.'})
         flash('Close uploads before running comparison.', 'error')
         return redirect(url_for('faculty.class_detail', code=code))
 
     class_id = cls.id
     app = current_app._get_current_object()
 
+    data = request.get_json(silent=True) or {}
+    mode = data.get('mode', 'semantic')
+    threshold = data.get('threshold')
+
     def run_in_background():
         with app.app_context():
             from app.engine import run_comparison as compare
-            compare(class_id)
+            compare(class_id, mode=mode, threshold=threshold)
 
     thread = threading.Thread(target=run_in_background, daemon=True)
     thread.start()
@@ -116,7 +122,7 @@ def run_comparison(code):
 @faculty.route('/class/<int:class_id>/progress')
 @role_required('faculty')
 def comparison_progress(class_id):
-    """Poll endpoint — returns current comparison progress as JSON."""
+    """Poll endpoint â€” returns current comparison progress as JSON."""
     from app.engine import get_progress
     progress = get_progress(class_id)
     if progress is None:
@@ -194,7 +200,7 @@ def export_excel(code):
 
     # Title row
     ws.merge_cells('A1:C1')
-    ws['A1'] = f'{cls.name} — Comparison Report'
+    ws['A1'] = f'{cls.name} â€” Comparison Report'
     ws['A1'].font = Font(bold=True, size=14)
     ws['A1'].alignment = Alignment(horizontal='center')
 
@@ -257,7 +263,7 @@ def delete_class(code):
     upload_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], cls.code)
     if os.path.exists(upload_dir):
         shutil.rmtree(upload_dir)
-    # Delete in order: results → submissions → student associations → class
+    # Delete in order: results â†’ submissions â†’ student associations â†’ class
     Result.query.filter_by(class_id=cls.id).delete()
     Submission.query.filter_by(class_id=cls.id).delete()
     db.session.execute(class_students.delete().where(class_students.c.class_id == cls.id))
@@ -267,7 +273,7 @@ def delete_class(code):
     return redirect(url_for('faculty.dashboard'))
 
 
-# ── Manual File Comparison ──
+# â”€â”€ Manual File Comparison â”€â”€
 
 def _extract_text_from_upload(filepath, ext):
     """
@@ -296,9 +302,9 @@ def manual_compare():
     hybrid similarity engine in a background thread.
 
     Form fields:
-        files[]   — 2 or more PDF/DOCX files
-        labels[]  — optional matching label per file (falls back to filename)
-        task_id   — client-generated UUID for progress polling
+        files[]   â€” 2 or more PDF/DOCX files
+        labels[]  â€” optional matching label per file (falls back to filename)
+        task_id   â€” client-generated UUID for progress polling
     """
     import os, uuid, tempfile, threading
     from flask import current_app
@@ -342,6 +348,13 @@ def manual_compare():
             'error': 'Need at least 2 valid files. ' + ' '.join(file_errors)
         }), 400
 
+    mode = request.form.get('mode', 'semantic').strip() or 'semantic'
+    raw_thresh = request.form.get('threshold', '').strip()
+    try:
+        threshold = float(raw_thresh) if raw_thresh else None
+    except ValueError:
+        threshold = None
+
     app = current_app._get_current_object()
 
     def run_in_background():
@@ -359,7 +372,7 @@ def manual_compare():
 
         with app.app_context():
             from app.engine import compare_texts_manual, _comparison_progress, _progress_lock
-            result = compare_texts_manual(task_id, items)
+            result = compare_texts_manual(task_id, items, mode=mode, threshold=threshold)
             # Stash the final result payload so the frontend can retrieve it
             with _progress_lock:
                 existing = _comparison_progress.get(task_id, {})
@@ -387,4 +400,6 @@ def manual_compare_progress():
     if progress is None:
         return jsonify({'status': 'idle', 'percent': 0, 'message': 'Not started yet.'})
     return jsonify(progress)
+
+
 
