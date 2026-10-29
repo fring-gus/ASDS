@@ -37,24 +37,20 @@ Raw Submissions (PDF / DOCX)
   └── Strip whitespace, punctuation, and ~677 TECH_STOPWORDS
          │
          ├──► [Semantic Mode]
-         │      │
-         │      ▼
-         │    Stage 1: all-mpnet-base-v2 (GPU/CPU batched embeddings)
-         │      │
-         │      ├── Bi-score >= 0.80 ──► [Auto-Flagged (Skip Cross-Encoder)]
-         │      ├── Bi-score < 0.65  ──► [Marked Safe (Skip Cross-Encoder)]
-         │      └── 0.65 <= Bi-score < 0.80 (Borderline Gray Zone)
-         │               │
-         │               ▼
-         │             Stage 2: cross-encoder/stsb-roberta-base
-         │               │
-         │               └── CE-Score replaces Bi-Score ──► Flag if CE >= 0.65
-         │
-         └──► [Lexical Mode]
-                │
-                ▼
-              TF-IDF (1-2 n-grams, max 5000 features) ──► Cosine Similarity
-```
+               │
+               ▼
+             Stage 1: all-mpnet-base-v2 (GPU/CPU batched embeddings)
+               │
+               ├── Bi-score >= 0.80 ──► [Auto-Flagged (Skip Cross-Encoder)]
+               ├── Bi-score < 0.65  ──► [Marked Safe (Skip Cross-Encoder)]
+               └── 0.65 <= Bi-score < 0.80 (Borderline Gray Zone)
+                        │
+                        ▼
+                      Stage 2: cross-encoder/stsb-roberta-base
+                        │
+                        └── CE-Score replaces Bi-Score ──► Flag if CE >= 0.65
+         
+       
 
 ---
 
