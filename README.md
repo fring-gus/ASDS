@@ -128,7 +128,7 @@ Access the app at [http://127.0.0.1:5000](http://127.0.0.1:5000).
 ```
 ├── app/
 │   ├── __init__.py           # Flask app factory, extensions, and error handlers
-│   ├── engine.py             # Similarity engine (v2.1-ce-replace)
+│   ├── engine.py             # Similarity engine
 │   ├── tech_stopwords.py     # Curated technical & academic stopword dictionary
 │   ├── models.py             # SQLAlchemy models (User, Class, Submission, Result)
 │   ├── faculty.py            # Faculty routes (classes, comparison, exports)
