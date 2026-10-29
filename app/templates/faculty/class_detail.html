@@ -1,0 +1,763 @@
+{% extends "base.html" %}
+{% block title %}{{ cls.name }} &mdash; ASDS{% endblock %}
+
+{% block content %}
+<a href="{{ url_for('faculty.dashboard') }}" class="back-link">&larr; Back to Dashboard</a>
+
+<div class="class-header">
+    <h1>{{ cls.name }}</h1>
+    <span class="badge {{ 'badge-open' if cls.is_open else 'badge-closed' }}">
+        {{ 'Open' if cls.is_open else 'Closed' }}
+    </span>
+</div>
+
+<div class="class-meta">
+    <span>Code: <strong>{{ cls.code }}</strong></span>
+    <span>Students: <strong>{{ student_count }}</strong></span>
+    <span>Submissions: <strong>{{ submissions | length }}</strong></span>
+</div>
+
+{% set submitted_ids = submissions | map(attribute='student_id') | list %}
+
+<details class="students-panel" open>
+    <summary>
+        <span>&#128101; Enrolled Students</span>
+        <span class="badge badge-open" style="margin-left:0.5rem;">{{ cls.students | length }}</span>
+    </summary>
+    {% if cls.students %}
+    <table class="data-table" style="margin-top:0.75rem;">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Name</th>
+                <th>Username</th>
+                <th>Submitted</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for s in cls.students | sort(attribute='name') %}
+            <tr>
+                <td>{{ loop.index }}</td>
+                <td>{{ s.name }}</td>
+                <td>{{ s.username }}</td>
+                <td>
+                    {% if s.id in submitted_ids %}
+                    <span class="status status-accepted">&#10004; Yes</span>
+                    {% else %}
+                    <span class="status status-pending">&#10006; No</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="empty-msg" style="padding:0.5rem 0;">No students have joined yet.</p>
+    {% endif %}
+</details>
+
+<h2>Submitted Abstracts</h2>
+
+{% if submissions %}
+<table class="data-table">
+    <thead>
+        <tr>
+            <th>#</th>
+            <th>Student</th>
+            <th>Project Title</th>
+            <th>Submitted</th>
+            <th>Status</th>
+            <th>File</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for sub in submissions %}
+        <tr>
+            <td>{{ loop.index }}</td>
+            <td>{{ sub.student.name }}</td>
+            <td>{{ sub.project_title }}</td>
+            <td>{{ sub.uploaded_at.strftime('%d %b %Y, %I:%M %p') }}</td>
+            <td>
+                <span class="status status-{{ sub.status }}">{{ sub.status | capitalize }}</span>
+            </td>
+            <td>
+                {% if sub.file_path %}
+                <a href="{{ url_for('faculty.download_file', submission_id=sub.id) }}" class="btn btn-sm btn-primary"
+                    style="padding:0.25rem 0.75rem; font-size:0.8rem; display:inline-flex; align-items:center; width:auto;">Download</a>
+                {% else %}
+                &mdash;
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p class="empty-msg">No submissions yet.</p>
+{% endif %}
+
+<div class="action-bar" style="display:flex; gap:0.75rem; flex-wrap:wrap; align-items:center; margin:1.5rem 0;">
+    {% if cls.is_open %}
+    <form method="POST" action="{{ url_for('faculty.close_uploads', code=cls.code) }}"
+        style="margin:0; display:inline-flex;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+        <button type="submit" class="btn"
+            style="background:#e67e22; color:#fff; min-width:180px; height:42px; padding:0 1.25rem;
+            display:inline-flex; align-items:center; justify-content:center; gap:0.5rem; font-size:0.92rem;
+            font-weight:600; border-radius:8px; box-sizing:border-box;">&#128274; Close Uploads</button>
+    </form>
+    {% else %}
+    <form method="POST" action="{{ url_for('faculty.reopen_uploads', code=cls.code) }}"
+        style="margin:0; display:inline-flex;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+        <button type="submit" class="btn"
+            style="background:#3498db; color:#fff; min-width:180px; height:42px; padding:0 1.25rem;
+            display:inline-flex; align-items:center; justify-content:center; gap:0.5rem; font-size:0.92rem;
+            font-weight:600; border-radius:8px; box-sizing:border-box;">&#128275; Reopen Uploads</button>
+    </form>
+    {% endif %}
+
+    {% if submissions | length >= 2 and not cls.is_open %}
+    <button type="button" id="btn-run-comparison" class="btn"
+        style="background:#4f6ef7; color:#fff; min-width:180px; height:42px; padding:0 1.25rem; display:inline-flex; align-items:center; justify-content:center; gap:0.5rem; font-size:0.92rem; font-weight:600; border-radius:8px; box-sizing:border-box;"
+        data-url="{{ url_for('faculty.run_comparison', code=cls.code) }}"
+        data-progress-url="{{ url_for('faculty.comparison_progress', class_id=cls.id) }}"
+        data-csrf="{{ csrf_token() }}">&#9654; Run Comparison</button>
+    {% endif %}
+
+    {% if cls.results | length > 0 %}
+    <form method="POST" action="{{ url_for('faculty.export_excel', code=cls.code) }}"
+        style="margin:0; display:inline-flex;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+        <button type="submit" class="btn"
+            style="background:#27ae60; color:#fff; min-width:180px; height:42px; padding:0 1.25rem;
+            display:inline-flex; align-items:center; justify-content:center; gap:0.5rem; font-size:0.92rem;
+            font-weight:600; border-radius:8px; box-sizing:border-box;">&#128202; Export Excel</button>
+    </form>
+    {% endif %}
+</div>
+
+<!-- Progress Modal -->
+<div id="progress-modal"
+    style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); align-items:center; justify-content:center;">
+    <div
+        style="background:#1a1a2e; border-radius:16px; padding:2rem 2.5rem; width:90%; max-width:480px; box-shadow:0 20px 60px rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.08);">
+        <h3 style="margin:0 0 0.3rem 0; color:#fff; font-size:1.2rem;">&#9203; Running Comparison</h3>
+        <p id="progress-message" style="color:#94a3b8; margin:0 0 1.2rem 0; font-size:0.9rem;">Starting...</p>
+
+        <div
+            style="background:rgba(255,255,255,0.06); border-radius:10px; height:22px; overflow:hidden; position:relative;">
+            <div id="progress-bar"
+                style="height:100%; width:0%; border-radius:10px; transition:width 0.4s ease; background:linear-gradient(90deg, #4f6ef7, #a855f7, #ec4899); background-size:200% 100%; animation:shimmer 2s linear infinite;">
+            </div>
+        </div>
+
+        <p id="progress-percent"
+            style="text-align:center; color:#e2e8f0; font-weight:700; font-size:1.5rem; margin:0.8rem 0 0.2rem 0;">
+            0%</p>
+
+        <div id="progress-steps" style="margin-top:1rem; display:flex; flex-wrap:wrap; gap:0.4rem;">
+        </div>
+    </div>
+</div>
+
+<style>
+    @keyframes shimmer {
+        0% {
+            background-position: 200% 0;
+        }
+
+        100% {
+            background-position: -200% 0;
+        }
+    }
+
+    #progress-modal .step-pill,
+    #manual-progress-modal .step-pill {
+        padding: 0.25rem 0.65rem;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 500;
+        transition: all 0.3s ease;
+    }
+
+    .step-pill.active {
+        background: rgba(79, 110, 247, 0.25);
+        color: #93b4fd;
+        border: 1px solid rgba(79, 110, 247, 0.4);
+    }
+
+    .step-pill.done {
+        background: rgba(39, 174, 96, 0.2);
+        color: #6ee7b7;
+        border: 1px solid rgba(39, 174, 96, 0.3);
+    }
+
+    .step-pill.pending {
+        background: rgba(255, 255, 255, 0.04);
+        color: #64748b;
+        border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+</style>
+
+<script>
+    (function () {
+        const btn = document.getElementById('btn-run-comparison');
+        if (!btn) return;
+
+        const steps = [
+            { key: 'init', label: 'Init' },
+            { key: 'preparing', label: 'Prepare' },
+            { key: 'preprocessing', label: 'Preprocess' },
+            { key: 'semantic', label: 'Semantic' },
+            { key: 'comparing', label: 'Comparing' },
+            { key: 'saving', label: 'Save' },
+            { key: 'finalizing', label: 'Finalize' },
+        ];
+
+        btn.addEventListener('click', function () {
+            const url = btn.dataset.url;
+            const progressUrl = btn.dataset.progressUrl;
+            const csrf = btn.dataset.csrf;
+
+            btn.disabled = true;
+            btn.textContent = '\u23F3 Starting...';
+
+            // Show modal
+            const modal = document.getElementById('progress-modal');
+            modal.style.display = 'flex';
+
+            // Render step pills
+            const stepsContainer = document.getElementById('progress-steps');
+            stepsContainer.innerHTML = steps.map(s =>
+                `<span class="step-pill pending" data-step="${s.key}">${s.label}</span>`
+            ).join('');
+
+            // Start comparison (POST)
+            fetch(url, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrf,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({}),
+            }).then(r => r.json()).then(data => {
+                if (data.error) {
+                    document.getElementById('progress-message').textContent = data.error;
+                    setTimeout(() => location.reload(), 2000);
+                    return;
+                }
+                // Start polling
+                pollProgress(progressUrl);
+            }).catch(err => {
+                document.getElementById('progress-message').textContent = 'Failed to start: ' + err;
+                setTimeout(() => location.reload(), 2000);
+            });
+        });
+
+        function pollProgress(url) {
+            const interval = setInterval(() => {
+                fetch(url).then(r => r.json()).then(data => {
+                    // Update bar
+                    const bar = document.getElementById('progress-bar');
+                    const pct = document.getElementById('progress-percent');
+                    const msg = document.getElementById('progress-message');
+
+                    bar.style.width = data.percent + '%';
+                    pct.textContent = data.percent + '%';
+                    msg.textContent = data.message || '';
+
+                    // Update step pills
+                    const currentStepIdx = steps.findIndex(s => s.key === data.step);
+                    steps.forEach((s, i) => {
+                        const pill = document.querySelector(`[data-step="${s.key}"]`);
+                        if (!pill) return;
+                        if (i < currentStepIdx) {
+                            pill.className = 'step-pill done';
+                            pill.textContent = '\u2713 ' + s.label;
+                        } else if (i === currentStepIdx) {
+                            pill.className = 'step-pill active';
+                        } else {
+                            pill.className = 'step-pill pending';
+                        }
+                    });
+
+                    // Done or error --- stop polling and reload
+                    if (data.status === 'done' || data.status === 'error') {
+                        clearInterval(interval);
+                        if (data.status === 'done') {
+                            bar.style.width = '100%';
+                            pct.textContent = '100%';
+                            bar.style.background = 'linear-gradient(90deg, #27ae60, #2ecc71)';
+                            msg.textContent = '\u2705 ' + data.message;
+                        } else {
+                            bar.style.background = '#e74c3c';
+                            msg.textContent = '\u274C ' + data.message;
+                        }
+                        setTimeout(() => location.reload(), 1500);
+                    }
+                }).catch(() => { });
+            }, 1000);
+        }
+    })();
+</script>
+
+{% set flagged = cls.results | selectattr('is_similar') | list %}
+{% set all_results = cls.results | sort(attribute='similarity_score', reverse=true) %}
+
+{% if cls.results | length > 0 %}
+<h2>Similarity Report</h2>
+
+<div class="report-summary">
+    <div class="stat-card">
+        <span class="stat-number">{{ cls.results | length }}</span>
+        <span class="stat-label">Total Pairs</span>
+    </div>
+    <div class="stat-card" style="border-left: 3px solid #e74c3c;">
+        <span class="stat-number" style="color:#e74c3c;">{{ flagged | length }}</span>
+        <span class="stat-label">Flagged (&ge; 65%)</span>
+    </div>
+    <div class="stat-card" style="border-left: 3px solid #27ae60;">
+        <span class="stat-number" style="color:#27ae60;">{{ cls.results | length - flagged | length }}</span>
+        <span class="stat-label">Safe</span>
+    </div>
+</div>
+
+{% if flagged | length > 0 %}
+<h3>&#128680; Flagged Pairs</h3>
+{% for result in flagged | sort(attribute='similarity_score', reverse=true) %}
+<div class="result-card result-flagged">
+    <div class="result-pair">
+        <div class="result-sub">
+            <strong>{{ result.submission_1.project_title }}</strong>
+            <span class="result-student">{{ result.submission_1.student.name }}</span>
+            <span class="status status-{{ result.submission_1.status }}">{{ result.submission_1.status | capitalize }}</span>
+        </div>
+        <span class="result-vs">vs</span>
+        <div class="result-sub">
+            <strong>{{ result.submission_2.project_title }}</strong>
+            <span class="result-student">{{ result.submission_2.student.name }}</span>
+            <span class="status status-{{ result.submission_2.status }}">{{ result.submission_2.status | capitalize }}</span>
+        </div>
+    </div>
+    <span class="similarity-score">{{ (result.similarity_score * 100) | round(1) }}%</span>
+</div>
+{% endfor %}
+{% endif %}
+
+{% set safe = all_results | rejectattr('is_similar') | list %}
+{% if safe | length > 0 %}
+<h3 style="margin-top:1.5rem;">&#9989; Safe Pairs (Top 10)</h3>
+{% for result in safe[:10] %}
+<div class="result-card">
+    <div class="result-pair">
+        <div class="result-sub">
+            <strong>{{ result.submission_1.project_title }}</strong>
+            <span class="result-student">{{ result.submission_1.student.name }}</span>
+        </div>
+        <span class="result-vs">vs</span>
+        <div class="result-sub">
+            <strong>{{ result.submission_2.project_title }}</strong>
+            <span class="result-student">{{ result.submission_2.student.name }}</span>
+        </div>
+    </div>
+    <span class="similarity-score" style="color:#27ae60;">{{ (result.similarity_score * 100) | round(1) }}%</span>
+</div>
+{% endfor %}
+{% if safe | length > 10 %}
+<p class="empty-msg" style="padding:0.5rem;">...and {{ safe | length - 10 }} more safe pairs.</p>
+{% endif %}
+{% endif %}
+
+{% endif %}
+
+<!-- Manual File Comparison Panel -->
+<details id="manual-compare-panel" class="manual-compare-details" style="margin-top:2rem;">
+    <summary id="manual-compare-summary"
+        style="cursor:pointer; list-style:none; display:flex; align-items:center; gap:0.7rem; padding:1rem 1.2rem; background:rgba(79,110,247,0.08); border:1px solid rgba(79,110,247,0.2); border-radius:12px; font-weight:600; font-size:1rem; color:#a8bbff; user-select:none; transition:background 0.2s;">
+        <span style="font-size:1.2rem;">&#128193;</span>
+        <span>Manual File Comparison</span>
+        <span style="margin-left:auto; font-size:0.8rem; font-weight:400; color:#64748b;">Select files from your
+            disk &mdash; compare without affecting class data</span>
+        <span id="manual-chevron" style="font-size:0.9rem; transition:transform 0.3s;">&#9662;</span>
+    </summary>
+
+    <div style="padding:1.2rem 0 0 0;">
+
+        <!-- Drop zone -->
+        <div id="manual-drop-zone"
+            style="border:2px dashed rgba(79,110,247,0.35); border-radius:12px; padding:2rem 1.5rem; text-align:center; cursor:pointer; transition:all 0.25s; background:rgba(79,110,247,0.04); position:relative;">
+            <p style="margin:0 0 0.5rem 0; font-size:1.5rem;">&#128193;</p>
+            <p style="margin:0 0 0.3rem 0; color:#a8bbff; font-weight:600;">Drag &amp; drop PDF / DOCX files here
+            </p>
+            <p style="margin:0; color:#64748b; font-size:0.85rem;">or click to browse &mdash; minimum 2 files,
+                maximum 120</p>
+            <input id="manual-file-input" type="file" multiple accept=".pdf,.docx"
+                style="position:absolute; inset:0; opacity:0; cursor:pointer; width:100%; height:100%;" />
+        </div>
+
+        <!-- File list with editable labels -->
+        <div id="manual-file-list" style="margin-top:1rem; display:flex; flex-direction:column; gap:0.5rem;"></div>
+
+        <!-- Error message -->
+        <p id="manual-error-msg" style="color:#f87171; margin:0.6rem 0 0 0; font-size:0.88rem; display:none;"></p>
+
+        <!-- Run button -->
+        <div style="margin-top:1rem; display:flex; align-items:center; gap:0.8rem; flex-wrap:wrap;">
+            <button id="btn-manual-compare" class="btn"
+                style="background:#4f6ef7; color:#fff; min-width:210px; height:42px; padding:0 1.4rem; display:inline-flex; align-items:center; justify-content:center; gap:0.5rem; font-size:0.92rem; font-weight:600; border-radius:8px; opacity:0.45; cursor:not-allowed; box-sizing:border-box;"
+                disabled data-url="{{ url_for('faculty.manual_compare') }}"
+                data-progress-url="{{ url_for('faculty.manual_compare_progress') }}" data-csrf="{{ csrf_token() }}">
+                &#9654; Run Manual Comparison
+            </button>
+            <span id="manual-file-count" style="color:#64748b; font-size:0.85rem;"></span>
+        </div>
+
+        <!-- In-page results -->
+        <div id="manual-results-area" style="margin-top:1.5rem;"></div>
+    </div>
+</details>
+
+<!-- Manual Compare Progress Modal -->
+<div id="manual-progress-modal"
+    style="display:none; position:fixed; inset:0; z-index:10000; background:rgba(0,0,0,0.65); backdrop-filter:blur(5px); align-items:center; justify-content:center;">
+    <div
+        style="background:#1a1a2e; border-radius:16px; padding:2rem 2.5rem; width:90%; max-width:480px; box-shadow:0 20px 60px rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.08);">
+        <h3 style="margin:0 0 0.3rem 0; color:#fff; font-size:1.2rem;">&#9203; Manual Comparison Running</h3>
+        <p id="manual-progress-message" style="color:#94a3b8; margin:0 0 1.2rem 0; font-size:0.9rem;">Starting...
+        </p>
+        <div
+            style="background:rgba(255,255,255,0.06); border-radius:10px; height:22px; overflow:hidden; position:relative;">
+            <div id="manual-progress-bar"
+                style="height:100%; width:0%; border-radius:10px; transition:width 0.4s ease; background:linear-gradient(90deg,#4f6ef7,#a855f7,#ec4899); background-size:200% 100%; animation:shimmer 2s linear infinite;">
+            </div>
+        </div>
+        <p id="manual-progress-percent"
+            style="text-align:center; color:#e2e8f0; font-weight:700; font-size:1.5rem; margin:0.8rem 0 0.2rem 0;">
+            0%</p>
+        <div id="manual-progress-steps" style="margin-top:1rem; display:flex; flex-wrap:wrap; gap:0.4rem;"></div>
+    </div>
+</div>
+
+<script>
+    (function () {
+        /* helpers */
+        function uuidv4() {
+            return ([1e7] + -1e3 + -4e3 + -8e3 + -1e11).replace(/[018]/g, c =>
+                (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16));
+        }
+
+        function showError(msg) {
+            const el = document.getElementById('manual-error-msg');
+            el.textContent = msg;
+            el.style.display = msg ? 'block' : 'none';
+        }
+
+        /* state */
+        let selectedFiles = [];   // Array of {file, label}
+
+        /* chevron toggle */
+        const panel = document.getElementById('manual-compare-panel');
+        const chevron = document.getElementById('manual-chevron');
+        panel.addEventListener('toggle', () => {
+            chevron.style.transform = panel.open ? 'rotate(180deg)' : '';
+        });
+
+        /* drop zone */
+        const dropZone = document.getElementById('manual-drop-zone');
+        const fileInput = document.getElementById('manual-file-input');
+
+        dropZone.addEventListener('dragover', e => {
+            e.preventDefault();
+            dropZone.style.borderColor = '#4f6ef7';
+            dropZone.style.background = 'rgba(79,110,247,0.10)';
+        });
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.style.borderColor = 'rgba(79,110,247,0.35)';
+            dropZone.style.background = 'rgba(79,110,247,0.04)';
+        });
+        dropZone.addEventListener('drop', e => {
+            e.preventDefault();
+            dropZone.style.borderColor = 'rgba(79,110,247,0.35)';
+            dropZone.style.background = 'rgba(79,110,247,0.04)';
+            addFiles(Array.from(e.dataTransfer.files));
+        });
+        fileInput.addEventListener('change', () => {
+            addFiles(Array.from(fileInput.files));
+            fileInput.value = '';   // reset so same file can be re-added after removal
+        });
+
+        function addFiles(files) {
+            const allowed = ['pdf', 'docx'];
+            files.forEach(f => {
+                const ext = f.name.split('.').pop().toLowerCase();
+                if (!allowed.includes(ext)) return;
+                if (selectedFiles.length >= 120) return;
+                // Avoid duplicates by name+size
+                if (selectedFiles.some(s => s.file.name === f.name && s.file.size === f.size)) return;
+                const label = f.name.replace(/\.[^.]+$/, '');   // filename without extension
+                selectedFiles.push({ file: f, label });
+            });
+            renderFileList();
+        }
+
+        function removeFile(idx) {
+            selectedFiles.splice(idx, 1);
+            renderFileList();
+        }
+
+        function renderFileList() {
+            const list = document.getElementById('manual-file-list');
+            const btn = document.getElementById('btn-manual-compare');
+            const cnt = document.getElementById('manual-file-count');
+            showError('');
+
+            if (selectedFiles.length === 0) {
+                list.innerHTML = '';
+                btn.disabled = true;
+                btn.style.opacity = '0.45';
+                btn.style.cursor = 'not-allowed';
+                cnt.textContent = '';
+                return;
+            }
+
+            list.innerHTML = selectedFiles.map((item, idx) => `
+        <div style="display:flex; align-items:center; gap:0.6rem; background:rgba(255,255,255,0.04); border-radius:8px; padding:0.5rem 0.8rem; border:1px solid rgba(255,255,255,0.07);">
+            <span style="font-size:1rem;">${item.file.name.endsWith('.pdf') ? '\uD83D\uDCC4' : '\uD83D\uDCC4'}</span>
+            <span style="color:#64748b; font-size:0.78rem; flex-shrink:0;">${(item.file.size / 1024).toFixed(0)} KB</span>
+            <input type="text" value="${escHtml(item.label)}"
+                   style="flex:1; background:transparent; border:none; border-bottom:1px solid rgba(79,110,247,0.3); color:#e2e8f0; font-size:0.88rem; padding:0.1rem 0.3rem; outline:none;"
+                   placeholder="Label for this file"
+                   data-idx="${idx}"
+                   oninput="manualUpdateLabel(this)" />
+            <button onclick="manualRemoveFile(${idx})"
+                    style="background:rgba(239,68,68,0.15); border:none; border-radius:6px; color:#f87171; font-size:0.85rem; width:26px; height:26px; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; padding:0;">\u2715</button>
+        </div>
+    `).join('');
+
+            const ready = selectedFiles.length >= 2;
+            btn.disabled = !ready;
+            btn.style.opacity = ready ? '1' : '0.45';
+            btn.style.cursor = ready ? 'pointer' : 'not-allowed';
+            cnt.textContent = `${selectedFiles.length} file${selectedFiles.length !== 1 ? 's' : ''} selected`;
+        }
+
+        function escHtml(s) {
+            return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        /* expose to inline handlers */
+        window.manualRemoveFile = removeFile;
+        window.manualUpdateLabel = function (input) {
+            const idx = parseInt(input.dataset.idx, 10);
+            if (selectedFiles[idx]) selectedFiles[idx].label = input.value;
+        };
+
+        /* Run button */
+        const steps = [
+            { key: 'init', label: 'Init' },
+            { key: 'preprocessing', label: 'Preprocess' },
+            { key: 'semantic', label: 'Semantic' },
+            { key: 'comparing', label: 'Comparing' },
+            { key: 'finalizing', label: 'Finalise' },
+        ];
+
+        document.getElementById('btn-manual-compare').addEventListener('click', function () {
+            if (selectedFiles.length < 2) {
+                showError('Please add at least 2 files.');
+                return;
+            }
+            showError('');
+            runManualCompare();
+        });
+
+        function runManualCompare() {
+            const btn = document.getElementById('btn-manual-compare');
+            const modal = document.getElementById('manual-progress-modal');
+            const stepsEl = document.getElementById('manual-progress-steps');
+            const progressUrl = btn.dataset.progressUrl;
+            const csrf = btn.dataset.csrf;
+            const taskId = uuidv4();
+
+            btn.disabled = true;
+            btn.textContent = '\u23F3 Running...';
+
+            // Show modal
+            modal.style.display = 'flex';
+
+            // Render step pills
+            stepsEl.innerHTML = steps.map(s =>
+                `<span class="step-pill pending" data-mstep="${s.key}">${s.label}</span>`
+            ).join('');
+
+            // Build FormData
+            const fd = new FormData();
+            fd.append('csrf_token', csrf);
+            fd.append('task_id', taskId);
+            selectedFiles.forEach(item => {
+                fd.append('files[]', item.file);
+                fd.append('labels[]', item.label);
+            });
+
+            fetch(btn.dataset.url, { method: 'POST', body: fd, headers: { 'X-CSRFToken': csrf } })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.error) {
+                        closeModal();
+                        showError(data.error);
+                        resetBtn();
+                        return;
+                    }
+                    pollManualProgress(progressUrl + '?task_id=' + taskId, taskId);
+                })
+                .catch(err => {
+                    closeModal();
+                    showError('Request failed: ' + err);
+                    resetBtn();
+                });
+        }
+
+        function pollManualProgress(pollUrl, taskId) {
+            const bar = document.getElementById('manual-progress-bar');
+            const pct = document.getElementById('manual-progress-percent');
+            const msg = document.getElementById('manual-progress-message');
+            const modal = document.getElementById('manual-progress-modal');
+
+            const interval = setInterval(() => {
+                fetch(pollUrl).then(r => r.json()).then(data => {
+                    bar.style.width = data.percent + '%';
+                    pct.textContent = data.percent + '%';
+                    msg.textContent = data.message || '';
+
+                    // Update step pills
+                    const curIdx = steps.findIndex(s => s.key === data.step);
+                    steps.forEach((s, i) => {
+                        const pill = document.querySelector(`[data-mstep="${s.key}"]`);
+                        if (!pill) return;
+                        if (i < curIdx) { pill.className = 'step-pill done'; pill.textContent = '\u2713 ' + s.label; }
+                        else if (i === curIdx) { pill.className = 'step-pill active'; }
+                        else { pill.className = 'step-pill pending'; }
+                    });
+
+                    if (data.status === 'done' || data.status === 'error') {
+                        clearInterval(interval);
+                        if (data.status === 'done') {
+                            bar.style.width = '100%';
+                            pct.textContent = '100%';
+                            bar.style.background = 'linear-gradient(90deg,#27ae60,#2ecc71)';
+                            bar.style.animation = 'none';
+                            msg.textContent = '\u2705 ' + data.message;
+                            setTimeout(() => {
+                                closeModal();
+                                renderManualResults(data.result || null, taskId);
+                                resetBtn();
+                            }, 900);
+                        } else {
+                            bar.style.background = '#e74c3c';
+                            bar.style.animation = 'none';
+                            msg.textContent = '\u274C ' + data.message;
+                            setTimeout(() => {
+                                closeModal();
+                                showError(data.message);
+                                resetBtn();
+                            }, 1500);
+                        }
+                    }
+                }).catch(() => { });
+            }, 1000);
+        }
+
+        function closeModal() {
+            const modal = document.getElementById('manual-progress-modal');
+            modal.style.display = 'none';
+            // Reset modal bar for next run
+            const bar = document.getElementById('manual-progress-bar');
+            bar.style.width = '0%';
+            bar.style.background = 'linear-gradient(90deg,#4f6ef7,#a855f7,#ec4899)';
+            bar.style.animation = 'shimmer 2s linear infinite';
+            document.getElementById('manual-progress-percent').textContent = '0%';
+            document.getElementById('manual-progress-message').textContent = 'Starting...';
+        }
+
+        function resetBtn() {
+            const btn = document.getElementById('btn-manual-compare');
+            btn.disabled = false;
+            btn.textContent = '\u25B6 Run Manual Comparison';
+            btn.style.opacity = '1';
+            btn.style.cursor = 'pointer';
+        }
+
+        /* Results renderer */
+        function renderManualResults(result, taskId) {
+            const area = document.getElementById('manual-results-area');
+            if (!result || result.error) {
+                area.innerHTML = `<p style="color:#f87171;">${result ? result.error : 'No results returned.'}</p>`;
+                return;
+            }
+
+            const { pairs, flagged, total, threshold } = result;
+            const threshPct = Math.round(threshold * 100);
+
+            const flaggedPairs = pairs.filter(p => p.is_similar);
+            const safePairs = pairs.filter(p => !p.is_similar);
+
+            function pairCard(p, isFlagged) {
+                const scorePct = Math.round(p.score * 100);
+                const scoreColor = isFlagged ? '#f87171' : '#6ee7b7';
+                const borderColor = isFlagged ? 'rgba(239,68,68,0.35)' : 'rgba(39,174,96,0.2)';
+                const bgColor = isFlagged ? 'rgba(239,68,68,0.05)' : 'rgba(39,174,96,0.04)';
+                return `
+        <div class="result-card ${isFlagged ? 'result-flagged' : ''}" style="border-color:${borderColor}; background:${bgColor};">
+            <div class="result-pair">
+                <div class="result-sub"><strong>${escHtml(p.label_a)}</strong></div>
+                <span class="result-vs">vs</span>
+                <div class="result-sub"><strong>${escHtml(p.label_b)}</strong></div>
+            </div>
+            <span class="similarity-score" style="color:${scoreColor};">${scorePct}%</span>
+        </div>`;
+            }
+
+            let html = `
+    <div style="border-top:1px solid rgba(255,255,255,0.07); padding-top:1.2rem; margin-top:0.5rem;">
+        <h3 style="margin:0 0 0.8rem 0; display:flex; align-items:center; gap:0.5rem;">
+            \uD83D\uDCCA Manual Comparison Results
+            <span style="font-size:0.78rem; font-weight:400; color:#64748b;">(threshold: ${threshPct}%)</span>
+        </h3>
+        <div class="report-summary" style="margin-bottom:1rem;">
+            <div class="stat-card">
+                <span class="stat-number">${total}</span>
+                <span class="stat-label">Total Pairs</span>
+            </div>
+            <div class="stat-card" style="border-left:3px solid #e74c3c;">
+                <span class="stat-number" style="color:#e74c3c;">${flagged}</span>
+                <span class="stat-label">Flagged (&ge; ${threshPct}%)</span>
+            </div>
+            <div class="stat-card" style="border-left:3px solid #27ae60;">
+                <span class="stat-number" style="color:#27ae60;">${total - flagged}</span>
+                <span class="stat-label">Safe</span>
+            </div>
+        </div>`;
+
+            if (flaggedPairs.length > 0) {
+                html += `<h4 style="color:#f87171; margin:0 0 0.6rem 0;">\uD83D\uDEA8 Flagged Pairs</h4>`;
+                flaggedPairs.forEach(p => html += pairCard(p, true));
+            }
+
+            if (safePairs.length > 0) {
+                html += `<h4 style="color:#6ee7b7; margin:1rem 0 0.6rem 0;">\u2705 Safe Pairs</h4>`;
+                safePairs.slice(0, 15).forEach(p => html += pairCard(p, false));
+                if (safePairs.length > 15) {
+                    html += `<p class="empty-msg" style="padding:0.4rem;">...and ${safePairs.length - 15} more safe pairs.</p>`;
+                }
+            }
+
+            html += `</div>`;
+            area.innerHTML = html;
+
+            // Scroll results into view smoothly
+            area.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+    })();
+</script>
+{% endblock %}
