@@ -1,13 +1,13 @@
 """
 ASDS — Automated Similarity Detection System
-Engine Version: v2.1-ce-replace
+
 
 Multi-Stage Semantic Similarity Engine with Domain-Aware Stopwords Filtering:
   1. Technical & Academic Stopwords Filtering:
      Strips ~677 curated CS/Engineering terms and academic filler words
      via TECH_STOPWORDS so similarity focuses on the *problem domain*
      rather than shared libraries, languages, and frameworks.
-  2. Two-Stage Semantic Pipeline (v2.1-ce-replace):
+  2. Two-Stage Semantic Pipeline :
      - Stage 1: Bi-encoder screening with all-mpnet-base-v2 (768-dim)
        using dynamic batch sizing (64 GPU, 16 CPU).
      - Cutoffs:
